@@ -1,12 +1,9 @@
-/*
- * Hello world web server
- * circuits4you.com
- */
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <time.h>
 #include <WiFiUdp.h>
+#include <ArduinoOTA.h>
 
 #include "index.h" //Our HTML webpage contents
 
@@ -17,8 +14,8 @@
 #define rPIN8  0 //RELAY
 
 // WiFi parameters
-const char* ssid = "DontTouchThis";
-const char* password = "!No3nTrY!1234567890";
+const char* ssid = "UPC8391079";
+const char* password = "dhpbacK3kuct";
 String time2;
 ESP8266WebServer server(80); //Server on port 80
 
@@ -30,12 +27,12 @@ char udpBuffer[ UDP_PACKET_SIZE];
 char incomingPacket[255];  // buffer for incoming packets
 char  replyPacekt[] = "ESP8266 got multicast message";  // a reply string to send back
 boolean discovered = false;
-IPAddress * YEELIGHT_IP = new IPAddress(192,168,0,31);
+IPAddress * YEELIGHT_IP = new IPAddress(192,168,0,59);
 
 WiFiUDP udp;
 
-unsigned int lowSpeed  = 10000; // Notabene: nicht Ã¼ber 16000
-unsigned int highSpeed = 1200;
+unsigned int lowSpeed  = 10000; // Notabene: nicht über 16000
+unsigned int highSpeed = 2000; // Notabene: nicht unter 1200
 
 //Intervall for checkEndpoints
 unsigned long interval=5000; // the time we need to wait
@@ -44,19 +41,21 @@ unsigned long previousMillis=0; // millis() returns an unsigned long.
 unsigned long interval2=250; // the time we need to wait
 unsigned long previousMillis2=0; // millis() returns an unsigned long.
 //Motor Timeout
-unsigned long interval3=30000; // the time we need to wait
+unsigned long interval3=10000; // the time we need to wait
 unsigned long previousMillis3=0; // millis() returns an unsigned long.
 int Steps = 0;
-boolean Direction = false; //true=up - false= down
+boolean Direction = false; //true=up - false=down
 boolean stopMotor = true; 
 boolean opening = false;
 boolean closing = false;
 int light = 1;
-int potiMaxOrig = 460;
-int potiMinOrig = 300;
+int potiMaxOrig = 360;
+int potiMinOrig = 220;
 int potiMax = potiMaxOrig;
 int potiMin = potiMinOrig;
 int median[3];
+
+String serialData;
 
 //==============================================================
 //                  SETUP
@@ -74,22 +73,22 @@ void setup(void){
   median[0]=sensorValue;median[1]=sensorValue;median[2]=sensorValue;
   
   WiFi.persistent(false);
-  
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);     //Connect to your WiFi router
-  Serial.println("");
+  println("");
   
   // Wait for connection
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
+    print(".");
   }
 
   //If connection successful show IP address in serial monitor
-  Serial.println("");
-  Serial.print("Connected to ");
-  Serial.println(ssid);
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());  //IP address assigned to your ESP
+  println("");
+  print("Connected to ");
+  println(ssid);
+  print("IP address: ");
+  println(WiFi.localIP().toString());  //IP address assigned to your ESP
 
   server.on("/", handleRoot);
   server.on("/openCloseDeathstar", openCloseDeathstar);
@@ -100,31 +99,87 @@ void setup(void){
   server.on("/setMode", modeLogic);
   server.on("/uptime", uptimeLogic);
   server.on("/discover", discover);
+  server.on("/console", consoleLogic);
   server.on("/initPage", initpageLogic);
   server.begin();                  //Start server
-  Serial.println("HTTP server started");
-
-  configTime(2 * 3600, 0, "pool.ntp.org", "time.nist.gov");
-  while (!time(nullptr)) {
-    Serial.print(":");
+  println("HTTP server started");
+  
+  configTime(2 * 3600, 0, "de.pool.ntp.org", "pool.ntp.org", "time.nist.gov");
+  time_t now;
+  struct tm * timeinfo;
+  time(&now);
+  timeinfo = localtime(&now);
+  int time_trials = 0;
+  while (timeinfo->tm_year == 70 && time_trials < 10) {
+    time(&now);
+    timeinfo = localtime(&now);
+    print(":");
     delay(1000);
+    time_trials++;
   }
-  time_t now = time(nullptr);
   time2 = ctime(&now);
-  Serial.println("Start time: " + time2);
+  println("Boot up time: " + time2);
 
-    // set udp port for listen
+  // set udp port for listen
   udp.begin(udplocalPort);
- //Serial.printf("Now listening at IP %s, UDP port %d\n", WiFi.localIP().toString().c_str(), udplocalPort);
+  //Serial.printf("Now listening at IP %s, UDP port %d\n", WiFi.localIP().toString().c_str(), udplocalPort);
+
+  //OTA Code:
+  // Port defaults to 8266
+  // ArduinoOTA.setPort(8266);
+
+  // Hostname defaults to esp8266-[ChipID]
+  // ArduinoOTA.setHostname("myesp8266");
+
+  // No authentication by default
+  // ArduinoOTA.setPassword("admin");
+
+  // Password can be set with it's md5 value as well
+  // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
+  // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
+
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH) {
+      type = "sketch";
+    } else { // U_SPIFFS
+      type = "filesystem";
+    }
+
+    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+    Serial.println("Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) {
+      Serial.println("Auth Failed");
+    } else if (error == OTA_BEGIN_ERROR) {
+      Serial.println("Begin Failed");
+    } else if (error == OTA_CONNECT_ERROR) {
+      Serial.println("Connect Failed");
+    } else if (error == OTA_RECEIVE_ERROR) {
+      Serial.println("Receive Failed");
+    } else if (error == OTA_END_ERROR) {
+      Serial.println("End Failed");
+    }
+  });
+  ArduinoOTA.begin();
 }
 //==============================================================
 //                     LOOP
 //==============================================================
 void loop(void){
-  //Serial.println(analogRead(A0));
+  // println(String(analogRead(A0)));
   
   // check if WLAN is connected
   if (WiFi.status() != WL_CONNECTED)
+  
   {
     WiFiStart();
   }
@@ -132,15 +187,15 @@ void loop(void){
 
   //****STEPPER MOTOR
   stepper(1);
-  //fullstepper(1);
   delayMicroseconds(highSpeed);
-  //delay(1000);
 
   if(!discovered){
     sendAndReceiveUDP();
   }
 
-    if ( Serial.available() )       {  Serial.write( Serial.read() );  }
+  if ( Serial.available() ) {  Serial.write( Serial.read() ); }
+
+  ArduinoOTA.handle();
 }
 
 //================================================================
@@ -170,9 +225,9 @@ void sendAndReceiveUDP(){
     //Serial.printf("UDP packet contents: %s\n", incomingPacket);
     String str(incomingPacket);
     if(str.indexOf("yeelight") >= 0){
-      Serial.print("Yeelight Found: ");
+      print("Yeelight Found: ");
       String ip = udp.remoteIP().toString();
-      Serial.println(ip);
+      println(ip);
       int oneIndex = ip.indexOf('.');
       String one = ip.substring(0, oneIndex);
       String rest = ip.substring(oneIndex+1);
@@ -192,7 +247,7 @@ void sendAndReceiveUDP(){
 
 void discoverYeelight()
 {
-  Serial.println("UDP send");
+  //Serial.println("UDP send");
   strcpy(udpBuffer, "M-SEARCH * HTTP/1.1\r\nMAN: \"ssdp:discover\"\r\nST: wifi_bulb\r\n"); 
   udp.beginPacketMulticast(ipBroadCast, udpRemotePort ,WiFi.localIP());
   udp.write(udpBuffer, sizeof(udpBuffer));
@@ -203,10 +258,12 @@ void discoverYeelight()
 // This routine is executed when you open its IP in browser
 //===============================================================
 void handleRoot() {
+ println("Connected");
  String s = MAIN_page; //Read HTML contents
  server.send(200, "text/html", s); //Send web page
 }
 void openCloseDeathstar() {
+  previousMillis3 = millis();
   String serverArg = server.arg("openclose");
   if(serverArg.indexOf("open") >= 0){
     Direction = true;
@@ -215,7 +272,7 @@ void openCloseDeathstar() {
     closing = false;
     potiMin = potiMinOrig;
     potiMax = potiMaxOrig;
-    Serial.println( "ACTION EXECUTED: Deathstar Open");
+    println( "ACTION EXECUTED: Deathstar Open");
   }
   if (serverArg.indexOf("close") >= 0){
     Direction = false;
@@ -224,9 +281,9 @@ void openCloseDeathstar() {
     closing = true;
     potiMax = potiMaxOrig;
     potiMin = potiMinOrig;
-    Serial.println( "ACTION EXECUTED: Deathstar Close");
+    println( "ACTION EXECUTED: Deathstar Close");
   }
- Serial.println("Deathstar Action = " + serverArg);
+ println("Deathstar Action = " + serverArg);
  server.send(200, "text/plain", "ok");
 }
 void setDeathstarPosition() {
@@ -246,9 +303,12 @@ void setDeathstarPosition() {
     closing = false;
     potiMax = setValue;
   }
- Serial.println("Set Deathstar Position = " + server.arg("value"));
+ println("Set Deathstar Position = " + server.arg("value"));
+ println("Current Position: " + String(analogRead(A0)));
  server.send(200, "text/plain", "ok");
 }
+
+
 String YEELIGHT_TOGGLE = "{\"id\": \"1\", \"method\": \"toggle\", \"params\":[]}\r\n";
 String YEELIGHT_ON = "{\"id\": \"1\", \"method\": \"set_power\", \"params\":[\"on\", \"smooth\", 500]}\r\n";
 String YEELIGHT_OFF = "{\"id\": \"1\", \"method\": \"set_power\", \"params\":[\"off\", \"smooth\", 500]}\r\n";
@@ -257,16 +317,14 @@ String YEELIGHT_RGB = "{\"id\": \"1\", \"method\": \"set_rgb\", \"params\":[ , \
 const uint16_t YEELIGHT_PORT = 55443;
 WiFiClient yeelight_client;
 void lightbulbLogic() {
-  Serial.println("1");
   server.send(200, "text/plain", "ok");
   String serverArg =  server.arg("onoff");
   if(serverArg.indexOf("on") >= 0){
-    Serial.println("2");
     //digitalWrite(rPIN8, HIGH);
     if (!yeelight_client.connect(*YEELIGHT_IP, YEELIGHT_PORT)) {
-      Serial.println("yeelight connection failed");
+      println("yeelight connection failed");
     } else {
-      Serial.println("yeelight connected");
+      println("yeelight connected");
       yeelight_client.print(YEELIGHT_ON);
     }
 
@@ -275,12 +333,11 @@ void lightbulbLogic() {
     light = 1;
   }
   if(serverArg.indexOf("off") >= 0){
-    Serial.println("3");
     //digitalWrite(rPIN8, LOW);
     if (!yeelight_client.connect(*YEELIGHT_IP, YEELIGHT_PORT)) {
-      Serial.println("yeelight connection failed");
+      println("yeelight connection failed");
     } else {
-      Serial.println("yeelight connected");
+      println("yeelight connected");
       yeelight_client.print(YEELIGHT_OFF);
     }
 
@@ -288,17 +345,17 @@ void lightbulbLogic() {
 
     light = 0;
   }
- Serial.println("Lightbulb Action = " + server.arg("onoff"));
+ println("Lightbulb Action = " + server.arg("onoff"));
 }
 
 void brightnessLogic(){
     server.send(200, "text/plain", "ok");
     String serverArg =  server.arg("value");
     if (!yeelight_client.connect(*YEELIGHT_IP, YEELIGHT_PORT)) {
-      Serial.println("yeelight connection failed");
+      println("yeelight connection failed");
       return;
     } else {
-      Serial.println("yeelight connected");
+      println("yeelight connected");
     }
   //Adjust yeelight String
   String brightnessSendString = YEELIGHT_BRIGHTNESS;
@@ -312,7 +369,7 @@ void brightnessLogic(){
 
     yeelight_client.stop();
 
-  Serial.println("Set Brightness = " + server.arg("value"));
+  println("Set Brightness = " + server.arg("value"));
 }
 unsigned long previousMillis4 = millis(); 
 unsigned long interval4 = 500;
@@ -324,14 +381,14 @@ void colorLogic(){
 
   // Get rid of '#' and convert it to integer
   if (!yeelight_client.connect(*YEELIGHT_IP, YEELIGHT_PORT)) {
-    Serial.println("yeelight connection failed");
+    println("yeelight connection failed");
     return;
   } else {
-    Serial.println("yeelight connected");
+    println("yeelight connected");
   }
   //Hex String to Int
   int number = (int) strtol( &serverArg[1], NULL, 16);
-  Serial.println(number);
+  println((String)number);
   
   //Adjust yeelight String
   String rgbSendString = YEELIGHT_RGB;
@@ -344,7 +401,7 @@ void colorLogic(){
 
     
   yeelight_client.print(rgbSendString);
-  Serial.println("Set Color = " + server.arg("value"));
+  println("Set Color = " + server.arg("value"));
   previousMillis4 = millis();
 
     yeelight_client.stop();
@@ -374,10 +431,10 @@ void modeLogic() {
   if(serverArg.indexOf("Party(slow)") >= 0){mode2exec =  YEELIGHT_MODE_PARTY_SLOW;}
   if(serverArg.indexOf("Party(very slow)") >= 0){mode2exec =  YEELIGHT_MODE_PARTY_VSLOW;}
   if (!yeelight_client.connect(*YEELIGHT_IP, YEELIGHT_PORT)) {
-      Serial.println("yeelight connection failed");
+      println("yeelight connection failed");
       return;
     } else {
-      Serial.println("yeelight connected");
+      println("yeelight connected");
     }
     yeelight_client.print(mode2exec);
 
@@ -386,11 +443,11 @@ void modeLogic() {
 }
 
 void uptimeLogic() {
- Serial.println("Uptime = " + time2);
+ println("Uptime = " + time2);
  server.send(200, "text/plain", time2);
 }
 void initpageLogic() {
- Serial.println("Page Initialization ..." );
+ println("Page Initialization ..." );
  String serialString = Serial.readString();
  int startIndex = serialString.indexOf("{\"position\"");
  /*while( startIndex == -1){
@@ -400,9 +457,14 @@ void initpageLogic() {
  String jsonAnswer = serialString.substring(startIndex, startIndex+29);*/
  String jsonAnswer = "{\"position\": " + (String)analogRead(A0) +", \"light\": " + (String)light + "}";
  //String jsonAnswer = "{\"position\": 750, \"light\": 1}";
- Serial.print("Initializing with: ");
- Serial.println(jsonAnswer);
+ print("Initializing with: ");
+ println(jsonAnswer);
  //{"position": 750, "light": 1}
+ server.send(200, "text/json", jsonAnswer);
+}
+
+void consoleLogic() {
+ String jsonAnswer = "{\"text\": \"" + (String)serialData + "\"}";
  server.send(200, "text/json", jsonAnswer);
 }
 
@@ -412,8 +474,6 @@ void checkEndpoints(){
   int sensorValue = analogRead(A0);
   median[1]=median[0];median[2]=median[1];median[0]=sensorValue;
   int MedianSsensorValue = (median[0]+median[1]+median[1]+median[2]+median[2])/5;
-  // print out the value you read:
-  Serial.println(MedianSsensorValue);
   if(opening == 1) {
     if(MedianSsensorValue > potiMax){
       stopMotor = true;
@@ -433,8 +493,8 @@ void checkEndpoints(){
   unsigned long currentMillis3 = millis(); // grab current time
   if ((unsigned long)(currentMillis3 - previousMillis3) >= interval3) {
     if(lastAverage == MedianSsensorValue || lastAverage == MedianSsensorValue+1 || lastAverage == MedianSsensorValue-1) {
-      Serial.println("STOP AUTOMATIC");
-      stopMotor = true;
+      println("STOP AUTOMATIC");
+      stopMotor = true; // true
     }
     lastAverage = MedianSsensorValue;
     previousMillis3 = millis();
@@ -505,6 +565,7 @@ void stepper(int xw){
 } 
 void SetDirection(){
   if(stopMotor==0){
+    //println("Step: " + String(Steps);
     if(Direction==1){ Steps++;}
     if(Direction==0){ Steps--; }
     if(Steps>7){Steps=0;}
@@ -518,33 +579,43 @@ void SetDirection(){
   }
 }
 
+void println(String text){
+  Serial.println(text);
+  text.trim();
+  text.replace("\"", "");
+  serialData = serialData + text + "<br>";
+}
+void print(String text){
+  Serial.print(text);
+  serialData = serialData + text;
+}
+
 int ulReconncount = 0;
 void WiFiStart()
 {
   ulReconncount++;
 
   // Connect to WiFi network
-  Serial.println();
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
+  println("");
+  println("");
+  print("Connecting to ");
+  println(ssid);
 
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
+    print(".");
   }
-  Serial.println("");
-  Serial.println("WiFi connected");
+  println("");
+  println("WiFi connected");
 
   // Start the server
   server.begin();
-  Serial.println("Server started");
+  println("Server started");
 
   // Print the IP address
-  Serial.println(WiFi.localIP());
-  Serial.print("Reconnect count: ");
-  Serial.println(ulReconncount);
+  println(WiFi.localIP().toString());
+  print("Reconnect count: ");
+  println((String)ulReconncount);
 }
-

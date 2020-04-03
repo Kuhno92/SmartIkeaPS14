@@ -6,8 +6,8 @@ const char MAIN_page[] PROGMEM = R"=====(
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jscolor/2.0.4/jscolor.min.js" type="text/javascript"></script>
 <!-- Init Page -->
 <script type="text/javascript">
-    var potiMax = 460;
-    var potiMin = 300;
+    var potiMax = 360;
+    var potiMin = 220;
     var init; //position = 720, light = 1
     var xhr = new XMLHttpRequest();
     xhr.open('post', '/initPage');
@@ -21,7 +21,9 @@ const char MAIN_page[] PROGMEM = R"=====(
               init = JSON.parse(xhr.responseText);
               console.log("Initializing with: ");
               console.log(init);
-              $("#deathstarSlider").val(init.position).slider("refresh"); //(potiMax+potiMin-init.position);
+              setTimeout(function(){
+                $("#deathstarSlider").val(init.position).slider("refresh"); //(potiMax+potiMin-init.position);
+              },200);
               if(init.position < (potiMax+potiMin)/2) {
                   $("#deathstar img.close").removeClass("invisible");
                 } else if(init.position >= (potiMax+potiMin)/2){
@@ -39,7 +41,7 @@ const char MAIN_page[] PROGMEM = R"=====(
 <body>
 <div data-role="page" data-theme="b">
     <div data-role="header">
-      <h1>Ikea PS 17 - Yeelight</h1>
+      <h1>Ikea PS 14 - Yeelight</h1>
     </div>
 
     <div id="main" data-role="main" class="ui-content">
@@ -52,11 +54,12 @@ const char MAIN_page[] PROGMEM = R"=====(
     /*First rule hides the text box, the second one makes slider full width*/
     div.ui-slider-slider input.ui-input-text {
       display: none;
-  }
-  div.ui-slider-slider div.ui-slider-track {
-      margin: 0 15px 0 15px !important;
-  }
-    </style>
+    }
+    div.ui-slider-slider div.ui-slider-track {
+        margin: 0 15px 0 15px !important;
+    }
+
+  </style>
 
     <!-- Deathstar -->
   <div id="deathstar" class="deathstar" style="position:relative; height:60vw; width:60vw; max-width:300px; max-height:300px; margin:0 auto;">
@@ -80,7 +83,7 @@ const char MAIN_page[] PROGMEM = R"=====(
   </style>
   <div id="deathstarSliderwrapper" class="ui-slider-slider" style="text-align: center; color:white; text-shadow: black 0.1em 0.1em 0.2em;""> 
     <label style="font-size: 130%;">Position:</label>
-    <input id="deathstarSlider" type="range" min="300" max="460" class="ui-hidden-accessible" data-theme="a" data-track-theme="b" />
+    <input id="deathstarSlider" type="range" min="220" max="360" class="ui-hidden-accessible" data-theme="a" data-track-theme="b" />
   </div>
 
   <!-- Lightbulb -->
@@ -124,7 +127,12 @@ const char MAIN_page[] PROGMEM = R"=====(
   <input class="btnmode"  value="Night Mode" type="button">
   <input class="discover" value="Discover(Dev.)" type="button">
   </div>
-
+  <div data-role="collapsible"><h4>Development</h4>
+    <div id="console-output" style="overflow-y: auto; max-height: 20vh;">
+      Console-output:
+    </div>
+    <button data-mini=true id="console-refresh-btn" >Refresh</button>
+  </div>
   <div data-role="footer" style="position:relative; bottom: 0; left: 0; bottom:0; left:0; background: #466368); color:white; text-shadow: black 0.1em 0.1em 0.2em;">
     <h3 id="footer">Copyright Nico Kuhn 2017 - BootUp Time: </h3>
   </div>
@@ -157,21 +165,41 @@ const char MAIN_page[] PROGMEM = R"=====(
           document.getElementById("main").style.removeProperty('touch-action');
         }
     });
+    $( "#console-refresh-btn" ).bind( "click", function(event, ui) {
+      console.log("Refreshing...")
+      var res; 
+      var xhr = new XMLHttpRequest();
+      xhr.open('post', '/console');
+      xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+      xhr.send();
+      xhr.onreadystatechange = function() 
+        { 
+          // If the request completed, close the extension popup
+          if (xhr.readyState == 4){
+            if (xhr.status == 200){
+              console.log(xhr.responseText)
+              init = JSON.parse(xhr.responseText);
+              console.log("Console data received!");
+              document.getElementById("console-output").innerHTML = init.text.replace(/(\r\n|\n|\r)/gm, "");
+            }
+          }
+        };
+    });
     $( ".btnmode" ).bind( "click", function(e) {
       var mode = e.target.value;
-    console.log("Setting Mode to: " + mode);
-    var xhr = new XMLHttpRequest();
-    xhr.open('post', '/setMode');
-    xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-    xhr.send('value='+ mode);
-    });
-     $( ".discover" ).bind( "click", function(e) {
-      var mode = e.target.value;
-    console.log("Setting Mode to: " + mode);
-    var xhr = new XMLHttpRequest();
-    xhr.open('post', '/discover');
-    xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-    xhr.send('value='+ mode);
+      console.log("Setting Mode to: " + mode);
+      var xhr = new XMLHttpRequest();
+      xhr.open('post', '/setMode');
+      xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+      xhr.send('value='+ mode);
+      });
+       $( ".discover" ).bind( "click", function(e) {
+        var mode = e.target.value;
+      console.log("Setting Mode to: " + mode);
+      var xhr = new XMLHttpRequest();
+      xhr.open('post', '/discover');
+      xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+      xhr.send('value='+ mode);
     });
     // Deathstar Logic -->
     $("#deathstarSlider").on( 'slidestop', function( event ) {
@@ -237,4 +265,3 @@ const char MAIN_page[] PROGMEM = R"=====(
   </div>
 </body>
 )=====";
-
