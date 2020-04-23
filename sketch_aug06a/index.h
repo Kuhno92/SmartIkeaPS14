@@ -6,8 +6,8 @@ const char MAIN_page[] PROGMEM = R"=====(
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jscolor/2.0.4/jscolor.min.js" type="text/javascript"></script>
 <!-- Init Page -->
 <script type="text/javascript">
-    var potiMax = 360;
-    var potiMin = 220;
+    var potiMax = 270;
+    var potiMin = 163;
     var init; //position = 720, light = 1
     var xhr = new XMLHttpRequest();
     xhr.open('post', '/initPage');
@@ -83,7 +83,7 @@ const char MAIN_page[] PROGMEM = R"=====(
   </style>
   <div id="deathstarSliderwrapper" class="ui-slider-slider" style="text-align: center; color:white; text-shadow: black 0.1em 0.1em 0.2em;""> 
     <label style="font-size: 130%;">Position:</label>
-    <input id="deathstarSlider" type="range" min="220" max="360" class="ui-hidden-accessible" data-theme="a" data-track-theme="b" />
+    <input id="deathstarSlider" type="range" min="163" max="270" class="ui-hidden-accessible" data-theme="a" data-track-theme="b" />
   </div>
 
   <!-- Lightbulb -->
@@ -177,10 +177,9 @@ const char MAIN_page[] PROGMEM = R"=====(
           // If the request completed, close the extension popup
           if (xhr.readyState == 4){
             if (xhr.status == 200){
+              console.log("Console data received:");
               console.log(xhr.responseText)
-              init = JSON.parse(xhr.responseText);
-              console.log("Console data received!");
-              document.getElementById("console-output").innerHTML = init.text.replace(/(\r\n|\n|\r)/gm, "");
+              document.getElementById("console-output").innerHTML = xhr.responseText;
             }
           }
         };

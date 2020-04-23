@@ -27,12 +27,14 @@ char udpBuffer[ UDP_PACKET_SIZE];
 char incomingPacket[255];  // buffer for incoming packets
 char  replyPacekt[] = "ESP8266 got multicast message";  // a reply string to send back
 boolean discovered = false;
-IPAddress * YEELIGHT_IP = new IPAddress(192,168,0,59);
+IPAddress * YEELIGHT_IP = new IPAddress(192,168,0,102);
+const char* yeelight_id = "0x0000000004a097e2";
 
 WiFiUDP udp;
 
-unsigned int lowSpeed  = 10000; // Notabene: nicht über 16000
-unsigned int highSpeed = 2000; // Notabene: nicht unter 1200
+unsigned int curSpeed = 900; // Notabene: nicht unter 900
+unsigned int upwardSpeed = 900; // Notabene: nicht unter 900
+unsigned int downwardSpeed = 700; // Notabene: nicht unter 700
 
 //Intervall for checkEndpoints
 unsigned long interval=5000; // the time we need to wait
@@ -49,8 +51,8 @@ boolean stopMotor = true;
 boolean opening = false;
 boolean closing = false;
 int light = 1;
-int potiMaxOrig = 360;
-int potiMinOrig = 220;
+int potiMaxOrig = 270;
+int potiMinOrig = 163;
 int potiMax = potiMaxOrig;
 int potiMin = potiMinOrig;
 int median[3];
@@ -187,7 +189,7 @@ void loop(void){
 
   //****STEPPER MOTOR
   stepper(1);
-  delayMicroseconds(highSpeed);
+  delayMicroseconds(curSpeed);
 
   if(!discovered){
     sendAndReceiveUDP();
@@ -222,25 +224,33 @@ void sendAndReceiveUDP(){
     {
       incomingPacket[len] = 0;
     }
-    //Serial.printf("UDP packet contents: %s\n", incomingPacket);
+    //println("UDP packet contents: ");
+    //println(incomingPacket);
     String str(incomingPacket);
     if(str.indexOf("yeelight") >= 0){
-      print("Yeelight Found: ");
-      String ip = udp.remoteIP().toString();
-      println(ip);
-      int oneIndex = ip.indexOf('.');
-      String one = ip.substring(0, oneIndex);
-      String rest = ip.substring(oneIndex+1);
-      int twoIndex = rest.indexOf('.');
-      String two = rest.substring(0, twoIndex);
-      rest = rest.substring(twoIndex+1);
-      int threeIndex = rest.indexOf('.');
-      String three = rest.substring(0, threeIndex);
-      rest = rest.substring(threeIndex+1);
-      int fourIndex = rest.indexOf('.');
-      String four = rest.substring(0, fourIndex);
-      discovered = true;
-      YEELIGHT_IP = new IPAddress(one.toInt(), two.toInt(),three.toInt(),four.toInt());
+      if(str.indexOf(yeelight_id) >= 0){
+        print("Yeelight Found: ");
+        String ip = udp.remoteIP().toString();
+        println(ip);
+        int oneIndex = ip.indexOf('.');
+        String one = ip.substring(0, oneIndex);
+        String rest = ip.substring(oneIndex+1);
+        int twoIndex = rest.indexOf('.');
+        String two = rest.substring(0, twoIndex);
+        rest = rest.substring(twoIndex+1);
+        int threeIndex = rest.indexOf('.');
+        String three = rest.substring(0, threeIndex);
+        rest = rest.substring(threeIndex+1);
+        int fourIndex = rest.indexOf('.');
+        String four = rest.substring(0, fourIndex);
+        discovered = true;
+        YEELIGHT_IP = new IPAddress(one.toInt(), two.toInt(),three.toInt(),four.toInt());
+      } else {
+        print("yeelight found but wrong ID:");
+        print(str.substring(str.indexOf("id: "), str.indexOf("id: ")+18));
+        print(" != ");
+        println(yeelight_id);
+      }
     }
   }
 }
@@ -494,7 +504,7 @@ void checkEndpoints(){
   if ((unsigned long)(currentMillis3 - previousMillis3) >= interval3) {
     if(lastAverage == MedianSsensorValue || lastAverage == MedianSsensorValue+1 || lastAverage == MedianSsensorValue-1) {
       println("STOP AUTOMATIC");
-      stopMotor = true; // true
+      stopMotor = false; // true
     }
     lastAverage = MedianSsensorValue;
     previousMillis3 = millis();
@@ -565,9 +575,8 @@ void stepper(int xw){
 } 
 void SetDirection(){
   if(stopMotor==0){
-    //println("Step: " + String(Steps);
-    if(Direction==1){ Steps++;}
-    if(Direction==0){ Steps--; }
+    if(Direction==1){ Steps--; curSpeed = upwardSpeed;}
+    if(Direction==0){ Steps++; curSpeed = downwardSpeed;}
     if(Steps>7){Steps=0;}
     if(Steps<0){Steps=7; }
     unsigned long currentMillis2 = millis(); // grab current time
